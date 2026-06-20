@@ -26,6 +26,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
 
     suspend fun saveProfile(profile: HunterProfile) {
         hunterDao.insertProfile(profile)
+        backupCurrentProfile()
     }
 
     // Convert imperial values to metric for calculations
@@ -120,6 +121,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
             totalCaloriesBurned = p.totalCaloriesBurned + 150.0 // Estimation per workout
         )
         hunterDao.insertProfile(updatedProfile)
+        backupCurrentProfile()
     }
 
     // Completing Daily Quest + bonus XP
@@ -141,6 +143,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
                 )
             }
         }
+        backupCurrentProfile()
     }
 
     // Auto-generate Daily Quests
@@ -180,6 +183,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
             bmi = bmi
         )
         hunterDao.insertBmiHistory(entry)
+        backupCurrentProfile()
     }
 
     private fun getYesterdayString(): String {
