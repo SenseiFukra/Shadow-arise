@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Shadow Arise",
+  "description": "Solo Leveling inspired dark fantasy fitness companion with persistent tracking, daily quests, XP level-ups, and an interactive AI knight companion \u0027Shadow\u0027.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
