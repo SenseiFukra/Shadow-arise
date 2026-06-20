@@ -222,9 +222,9 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun registerUser(username: String, passwordHash: String, nickname: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun registerUser(username: String, passwordHash: String, nickname: String, mobileNumber: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            val success = repository.registerNewUser(username, passwordHash, nickname)
+            val success = repository.registerNewUser(username, passwordHash, nickname, mobileNumber)
             if (success) {
                 generateQuestsForDate(getTodayDateString())
                 onSuccess()
@@ -259,12 +259,12 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun completeOnboarding(height: Double, weight: Double, age: Int, gender: String, unitType: String) {
+    fun completeOnboarding(height: Double, weight: Double, age: Int, gender: String, unitType: String, activityLevel: String = "Moderate") {
         viewModelScope.launch {
             val current = repository.getProfileSync() ?: return@launch
             val formattedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val metricPair = repository.convertToMetric(weight, height, unitType)
-            val bmiVal = repository.calculateBmi(metricPair.second, metricPair.first)
+            val bmiVal = repository.calculateBmi(metricPair.first, metricPair.second)
 
             val updatedProfile = current.copy(
                 height = height,
@@ -272,6 +272,7 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
                 age = age,
                 gender = gender,
                 unitType = unitType,
+                activityLevel = activityLevel,
                 joinDateString = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date())
             )
             repository.saveProfile(updatedProfile)
@@ -281,17 +282,18 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun updateProfileMeasurements(height: Double, weight: Double, age: Int) {
+    fun updateProfileMeasurements(height: Double, weight: Double, age: Int, activityLevel: String) {
         viewModelScope.launch {
             val current = repository.getProfileSync() ?: return@launch
             val formattedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val metricPair = repository.convertToMetric(weight, height, current.unitType)
-            val bmiVal = repository.calculateBmi(metricPair.second, metricPair.first)
+            val bmiVal = repository.calculateBmi(metricPair.first, metricPair.second)
 
             val updatedProfile = current.copy(
                 height = height,
                 weight = weight,
-                age = age
+                age = age,
+                activityLevel = activityLevel
             )
             repository.saveProfile(updatedProfile)
 

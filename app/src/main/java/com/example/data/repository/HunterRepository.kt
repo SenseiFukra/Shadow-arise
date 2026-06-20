@@ -56,7 +56,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
         }
     }
 
-    fun calculateDailyCalories(weightKg: Double, heightCm: Double, age: Int, gender: String): Double {
+    fun calculateDailyCalories(weightKg: Double, heightCm: Double, age: Int, gender: String, activityLevel: String = "Moderate"): Double {
         val bmr = when (gender.uppercase(Locale.ROOT)) {
             "MALE" -> (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5
             "FEMALE" -> (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161
@@ -66,7 +66,15 @@ class HunterRepository(private val hunterDao: HunterDao) {
                 (male + female) / 2.0
             }
         }
-        return bmr * 1.375
+        val multiplier = when (activityLevel.lowercase(Locale.ROOT).trim()) {
+            "sedentary" -> 1.2
+            "light", "lightly active" -> 1.375
+            "moderate", "moderately active" -> 1.55
+            "very", "very active" -> 1.725
+            "extra", "extra active" -> 1.9
+            else -> 1.55
+        }
+        return bmr * multiplier
     }
 
     fun calculateWaterIntake(weightKg: Double): Double {
@@ -328,7 +336,7 @@ class HunterRepository(private val hunterDao: HunterDao) {
         hunterDao.insertProfile(defaultProfile)
     }
 
-    suspend fun registerNewUser(username: String, passwordHash: String, nickname: String): Boolean {
+    suspend fun registerNewUser(username: String, passwordHash: String, nickname: String, mobileNumber: String): Boolean {
         // Check if username existing database
         val existing = hunterDao.getUserAccountSync(username)
         if (existing != null) return false
@@ -337,7 +345,8 @@ class HunterRepository(private val hunterDao: HunterDao) {
         val newAccount = com.example.data.database.UserAccount(
             username = username,
             passwordHash = passwordHash,
-            nickname = nickname
+            nickname = nickname,
+            mobileNumber = mobileNumber
         )
         hunterDao.insertUserAccount(newAccount)
 

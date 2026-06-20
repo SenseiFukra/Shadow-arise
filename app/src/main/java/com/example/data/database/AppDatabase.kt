@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         BmiHistory::class,
         UserAccount::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

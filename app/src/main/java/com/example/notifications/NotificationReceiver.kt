@@ -55,7 +55,13 @@ class NotificationReceiver : BroadcastReceiver() {
         val heightCm = profile?.height ?: 175.0
         val age = profile?.age ?: 25
         val gender = profile?.gender ?: "MALE"
-        val calorieGoal = repository.calculateDailyCalories(weightKg, heightCm, age, gender).toInt()
+        val calorieGoal = repository.calculateDailyCalories(
+            weightKg = weightKg,
+            heightCm = heightCm,
+            age = age,
+            gender = gender,
+            activityLevel = profile?.activityLevel ?: "Moderate"
+        ).toInt()
 
         // Fetch workouts and quests completed today
         val workoutsCount = db.hunterDao().getWorkoutsCountForDate(todayDateStr)

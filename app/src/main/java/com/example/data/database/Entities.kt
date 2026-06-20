@@ -23,7 +23,8 @@ data class HunterProfile(
     val aiChatEnabled: Boolean = true,
     val joinDateString: String = "June 19, 2026",
     val username: String? = null,
-    val isRegistered: Boolean = false
+    val isRegistered: Boolean = false,
+    val activityLevel: String = "Moderate"
 )
 
 @Entity(tableName = "user_account")
@@ -31,6 +32,7 @@ data class UserAccount(
     @PrimaryKey val username: String,
     val passwordHash: String,
     val nickname: String,
+    val mobileNumber: String = "",
     val profileJson: String? = null,
     val workoutsJson: String? = null,
     val bmiHistoryJson: String? = null,

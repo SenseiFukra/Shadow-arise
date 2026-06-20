@@ -166,8 +166,8 @@ fun ShadowAriseApp(
                 )
                 "ONBOARDING" -> OnboardingScreenView(
                     profile = profileState,
-                    onOnboardingComplete = { h, w, age, g, u ->
-                        viewModel.completeOnboarding(h, w, age, g, u)
+                    onOnboardingComplete = { h, w, age, g, u, act ->
+                        viewModel.completeOnboarding(h, w, age, g, u, act)
                         appScreenState = "MAIN"
                     }
                 )
@@ -835,15 +835,18 @@ fun LoginScreenView(
     viewModel: HunterViewModel,
     onLoginSuccess: (isFirstTime: Boolean) -> Unit
 ) {
-    var activeTab by remember { mutableStateOf(0) } // 0: Guest, 1: Register, 2: Login
+    var activeTab by remember { mutableStateOf(0) } // 0: Register, 1: Sign In
     
-    // Form States
+    // Form States (Register)
     var nicknameState by remember { mutableStateOf("") }
     var usernameState by remember { mutableStateOf("") }
     var passwordState by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     
+    // Form States (Login)
     var loginUsernameState by remember { mutableStateOf("") }
     var loginPasswordState by remember { mutableStateOf("") }
+    var showLoginPassword by remember { mutableStateOf(false) }
     
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
@@ -887,7 +890,7 @@ fun LoginScreenView(
                 title = "MONARCH SYSTEM GATEWAY",
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Custom Tab Row
+                // Custom Tab Row (Exactly TWO options: REGISTER and SIGN IN)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -895,7 +898,7 @@ fun LoginScreenView(
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    val tabs = listOf("GUEST", "REGISTER", "SIGN IN")
+                    val tabs = listOf("REGISTER", "SIGN IN")
                     tabs.forEachIndexed { index, title ->
                         val isSelected = activeTab == index
                         Box(
@@ -970,75 +973,6 @@ fun LoginScreenView(
 
                 when (activeTab) {
                     0 -> {
-                        // Guest Tab
-                        Text(
-                            text = "Awaken instantly with a local nickname. No registry needed, but stats are only stored locally on this device.",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = nicknameState,
-                            onValueChange = { nicknameState = it },
-                            label = { Text("Hunter Nickname", fontFamily = FontFamily.Monospace, color = TextSecondary) },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedBorderColor = GlowPurple,
-                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
-                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
-                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
-                            ),
-                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("guest_nickname_input"),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Button(
-                            onClick = {
-                                if (nicknameState.trim().isEmpty()) {
-                                    errorMessage = "Identify yourself, Hunter. Enter a nickname."
-                                    return@Button
-                                }
-                                isLoading = true
-                                errorMessage = null
-                                viewModel.loginAsGuest(nicknameState.trim()) {
-                                    isLoading = false
-                                    onLoginSuccess(true) // guest always goes to onboarding
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .testTag("guest_login_button"),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GlowPurple,
-                                contentColor = DeepPurpleBg
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(color = DeepPurpleBg, modifier = Modifier.size(22.dp))
-                            } else {
-                                Text(
-                                    text = "ARISE AS GUEST",
-                                    fontSize = 14.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 2.sp
-                                )
-                            }
-                        }
-                    }
-                    1 -> {
                         // Register Tab
                         Text(
                             text = "Register a secure Monarch account to back up and preserve your strength across training cycles.",
@@ -1049,6 +983,7 @@ fun LoginScreenView(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
+                        // 1. Nickname
                         OutlinedTextField(
                             value = nicknameState,
                             onValueChange = { nicknameState = it },
@@ -1070,6 +1005,7 @@ fun LoginScreenView(
                             shape = RoundedCornerShape(10.dp)
                         )
 
+                        // 2. Username
                         OutlinedTextField(
                             value = usernameState,
                             onValueChange = { usernameState = it },
@@ -1091,13 +1027,27 @@ fun LoginScreenView(
                             shape = RoundedCornerShape(10.dp)
                         )
 
+                        // 3. Password with eye option toggled
                         OutlinedTextField(
                             value = passwordState,
                             onValueChange = { passwordState = it },
                             label = { Text("Monarch Password", fontFamily = FontFamily.Monospace, color = TextSecondary) },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                Text(
+                                    text = if (showPassword) "HIDE" else "SHOW",
+                                    color = GlowPurple,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clickable { showPassword = !showPassword }
+                                        .padding(end = 12.dp)
+                                        .testTag("toggle_register_password")
+                                )
+                            },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
@@ -1108,12 +1058,28 @@ fun LoginScreenView(
                             ),
                             textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("register_password_input"),
+                                        .fillMaxWidth()
+                                        .testTag("register_password_input"),
                             shape = RoundedCornerShape(10.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        // Dynamic Visual password requirements checklists (Min 8 letters, 1 letter, 1 special char)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val lenOk = passwordState.length > 8
+                            val letOk = passwordState.any { it.isLetter() }
+                            val specOk = passwordState.any { !it.isLetterOrDigit() }
+
+                            RequirementRow(text = "Must be greater than 8 characters", isMet = lenOk)
+                            RequirementRow(text = "Contains at least 1 alphabetic letter", isMet = letOk)
+                            RequirementRow(text = "Contains at least 1 special character (@, #, $, etc.)", isMet = specOk)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Button(
                             onClick = {
@@ -1125,16 +1091,30 @@ fun LoginScreenView(
                                     errorMessage = "All registry fields must be defined."
                                     return@Button
                                 }
-                                if (passwordState.length < 4) {
-                                    errorMessage = "Password integrity warning: Minimum 4 characters."
+                                val checkPasswordLength = passwordState.length > 8
+                                val checkPasswordLetter = passwordState.any { it.isLetter() }
+                                val checkPasswordSpecial = passwordState.any { !it.isLetterOrDigit() }
+
+                                if (!checkPasswordLength) {
+                                    errorMessage = "Password must be greater than 8 characters."
                                     return@Button
                                 }
+                                if (!checkPasswordLetter) {
+                                    errorMessage = "Password must contain at least one letter."
+                                    return@Button
+                                }
+                                if (!checkPasswordSpecial) {
+                                    errorMessage = "Password must contain at least one special character (such as @, #, $, etc.)."
+                                    return@Button
+                                }
+
                                 isLoading = true
                                 errorMessage = null
                                 viewModel.registerUser(
                                     username = usernameState.trim(),
                                     passwordHash = passwordState,
                                     nickname = nicknameState.trim(),
+                                    mobileNumber = "",
                                     onSuccess = {
                                         isLoading = false
                                         successMessage = "Monarch Registry: Account initialized!"
@@ -1169,7 +1149,7 @@ fun LoginScreenView(
                             }
                         }
                     }
-                    2 -> {
+                    1 -> {
                         // Sign In Tab
                         Text(
                             text = "Enter Monarch credentials to reopen the gateway and sync your achievements with the active session.",
@@ -1206,8 +1186,21 @@ fun LoginScreenView(
                             onValueChange = { loginPasswordState = it },
                             label = { Text("Monarch Password", fontFamily = FontFamily.Monospace, color = TextSecondary) },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (showLoginPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                Text(
+                                    text = if (showLoginPassword) "HIDE" else "SHOW",
+                                    color = GlowPurple,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clickable { showLoginPassword = !showLoginPassword }
+                                        .padding(end = 12.dp)
+                                        .testTag("toggle_login_password")
+                                )
+                            },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
                                 unfocusedTextColor = TextPrimary,
@@ -1276,19 +1269,42 @@ fun LoginScreenView(
     }
 }
 
+@Composable
+fun RequirementRow(text: String, isMet: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = if (isMet) Icons.Default.CheckCircle else Icons.Default.Close,
+            contentDescription = null,
+            tint = if (isMet) Color(0xFF00FF87) else Color.Gray.copy(alpha = 0.6f),
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = text,
+            color = if (isMet) Color(0xFF00FF87) else Color.Gray,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
 // ==========================================
 // ONBOARDING SCREEN VIEW
 // ==========================================
 @Composable
 fun OnboardingScreenView(
     profile: HunterProfile?,
-    onOnboardingComplete: (height: Double, weight: Double, age: Int, gender: String, unitType: String) -> Unit
+    onOnboardingComplete: (height: Double, weight: Double, age: Int, gender: String, unitType: String, activityLevel: String) -> Unit
 ) {
-    var heightStr by remember { mutableStateOf("") }
+    var heightCmStr by remember { mutableStateOf("") }
     var weightStr by remember { mutableStateOf("") }
     var ageStr by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("Male") }
-    var unitType by remember { mutableStateOf("METRIC") } // METRIC vs IMPERIAL
+    var unitType by remember { mutableStateOf("METRIC") } // defaulted to METRIC
+    var activityLevel by remember { mutableStateOf("Moderate") }
     var errorMsg by remember { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
@@ -1323,57 +1339,6 @@ fun OnboardingScreenView(
         SystemWindow(
             title = "REGISTRATION FORM"
         ) {
-            // UNIT TOGGLE
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Standard Unit Settings:",
-                    color = TextPrimary,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 14.sp
-                )
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(DarkPurpleAccent)
-                        .border(1.dp, GlowPurple.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(if (unitType == "METRIC") GlowPurple else Color.Transparent)
-                            .clickable { unitType = "METRIC" }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            "Metric (kg/cm)",
-                            color = if (unitType == "METRIC") DeepPurpleBg else TextSecondary,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .background(if (unitType == "IMPERIAL") GlowPurple else Color.Transparent)
-                            .clickable { unitType = "IMPERIAL" }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            "Imperial (lbs/in)",
-                            color = if (unitType == "IMPERIAL") DeepPurpleBg else TextSecondary,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
             // GENDER SELECTION
             Text(
                 "Gender Assignment:",
@@ -1416,15 +1381,15 @@ fun OnboardingScreenView(
 
             // HEIGHT INPUT
             Text(
-                text = if (unitType == "METRIC") "Height (cm):" else "Height (inches):",
+                text = "Height (cm):",
                 color = TextPrimary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 12.dp)
             )
             TextField(
-                value = heightStr,
-                onValueChange = { heightStr = it },
+                value = heightCmStr,
+                onValueChange = { heightCmStr = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
@@ -1442,7 +1407,7 @@ fun OnboardingScreenView(
 
             // WEIGHT INPUT
             Text(
-                text = if (unitType == "METRIC") "Weight (kg):" else "Weight (lbs):",
+                text = "Weight (kg):",
                 color = TextPrimary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
@@ -1492,6 +1457,47 @@ fun OnboardingScreenView(
                 singleLine = true
             )
 
+            // ACTIVITY LEVEL INPUT
+            Text(
+                text = "Activity Level Selection:",
+                color = TextPrimary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("Sedentary", "Light", "Moderate", "Very", "Extra").forEach { act ->
+                    val isSel = activityLevel == act
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) GlowPurple else DarkPurpleAccent)
+                            .border(
+                                1.dp,
+                                if (isSel) BrightPurpleHighlight else GlowPurple.copy(alpha = 0.3f),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { activityLevel = act }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = act,
+                            color = if (isSel) DeepPurpleBg else TextPrimary,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+
             if (errorMsg.isNotEmpty()) {
                 Text(
                     text = errorMsg,
@@ -1506,14 +1512,14 @@ fun OnboardingScreenView(
 
             Button(
                 onClick = {
-                    val h = heightStr.toDoubleOrNull()
+                    val hCm = heightCmStr.toDoubleOrNull()
                     val w = weightStr.toDoubleOrNull()
                     val age = ageStr.toIntOrNull()
 
-                    if (h == null || h <= 0 || w == null || w <= 0 || age == null || age <= 0) {
+                    if (hCm == null || hCm <= 0 || w == null || w <= 0 || age == null || age <= 0) {
                         errorMsg = "INVALID STATUS: Please enter authentic numerical dimensions."
                     } else {
-                        onOnboardingComplete(h, w, age, gender, unitType)
+                        onOnboardingComplete(hCm, w, age, gender, unitType, activityLevel)
                     }
                 },
                 modifier = Modifier
@@ -1565,21 +1571,22 @@ fun HomeScreenView(
     val gender = profile?.gender ?: "Male"
 
     val metricPair = viewModel.repository.convertToMetric(weight, height, unitType)
-    val bmiValue = viewModel.repository.calculateBmi(metricPair.second, metricPair.first)
+    val bmiValue = viewModel.repository.calculateBmi(metricPair.first, metricPair.second)
     val bmiLabel = viewModel.repository.getBmiLabel(bmiValue)
 
-    // Calories: Mifflin-St Jeor, Moderate activity (bmr * 1.55)
+    // Calories: Mifflin-St Jeor with dynamic activityLevel
     val weightKg = metricPair.first
     val heightCm = metricPair.second
-    val bmr = if (gender.lowercase().startsWith("m")) {
-        10.0 * weightKg + 6.25 * heightCm - 5.0 * age + 5.0
-    } else {
-        10.0 * weightKg + 6.25 * heightCm - 5.0 * age - 161.0
-    }
-    val calories = bmr * 1.55
+    val calories = viewModel.repository.calculateDailyCalories(
+        weightKg = weightKg,
+        heightCm = heightCm,
+        age = age,
+        gender = gender,
+        activityLevel = profile?.activityLevel ?: "Moderate"
+    )
 
     // Water: 35ml x Weight (kg)
-    val water = (35.0 * weightKg) / 1000.0
+    val water = viewModel.repository.calculateWaterIntake(weightKg)
 
     // Today's EXP: derived dynamically from workout logs completed today
     val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -2557,7 +2564,7 @@ fun ExerciseScreenView(viewModel: HunterViewModel, profile: HunterProfile?) {
     val unitType = profile?.unitType ?: "METRIC"
 
     val metricPair = viewModel.repository.convertToMetric(weight, height, unitType)
-    val bmi = viewModel.repository.calculateBmi(metricPair.second, metricPair.first)
+    val bmi = viewModel.repository.calculateBmi(metricPair.first, metricPair.second)
 
     // Assign rank class and difficulty
     val info = when {
@@ -3207,6 +3214,7 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
     var heightInput by remember { mutableStateOf("") }
     var weightInput by remember { mutableStateOf("") }
     var ageInput by remember { mutableStateOf("") }
+    var activityLevelInput by remember(profile) { mutableStateOf(profile?.activityLevel ?: "Moderate") }
 
     val h = profile?.height ?: 170.0
     val w = profile?.weight ?: 65.0
@@ -3221,7 +3229,7 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
     var aiChatEnabled by remember(profile) { mutableStateOf(profile?.aiChatEnabled ?: true) }
 
     val metricPair = viewModel.repository.convertToMetric(w, h, uType)
-    val bmi = viewModel.repository.calculateBmi(metricPair.second, metricPair.first)
+    val bmi = viewModel.repository.calculateBmi(metricPair.first, metricPair.second)
     val bmiLabel = viewModel.repository.getBmiLabel(bmi)
 
     Column(
@@ -3343,6 +3351,7 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
                         heightInput = h.toString()
                         weightInput = w.toString()
                         ageInput = age.toString()
+                        activityLevelInput = profile?.activityLevel ?: "Moderate"
                         showEditDialog = true
                     },
                     modifier = Modifier.testTag("edit_records_button")
@@ -3679,6 +3688,41 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     )
+
+                    // Activity Level
+                    Text("Activity Level:", color = TextPrimary, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("Sedentary", "Light", "Moderate", "Very", "Extra").forEach { act ->
+                            val isSel = activityLevelInput == act
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isSel) GlowPurple else DarkPurpleAccent)
+                                    .border(
+                                        1.dp,
+                                        if (isSel) BrightPurpleHighlight else GlowPurple.copy(alpha = 0.2f),
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable { activityLevelInput = act }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = act,
+                                    color = if (isSel) DeepPurpleBg else TextPrimary,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -3689,7 +3733,7 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
                         val newAge = ageInput.toIntOrNull()
 
                         if (newH != null && newH > 0 && newW != null && newW > 0 && newAge != null && newAge > 0) {
-                            viewModel.updateProfileMeasurements(newH, newW, newAge)
+                            viewModel.updateProfileMeasurements(newH, newW, newAge, activityLevelInput)
                             showEditDialog = false
                         }
                     }
