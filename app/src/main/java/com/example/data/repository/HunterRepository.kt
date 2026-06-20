@@ -221,4 +221,137 @@ class HunterRepository(private val hunterDao: HunterDao) {
             else -> Pair((xp - 100000).coerceAtLeast(0), 500000)
         }
     }
+
+    suspend fun getUserAccount(username: String) = hunterDao.getUserAccountSync(username)
+
+    suspend fun saveUserAccount(account: com.example.data.database.UserAccount) = hunterDao.insertUserAccount(account)
+
+    suspend fun clearActiveSession() {
+        hunterDao.clearProfileTable()
+        hunterDao.clearWorkoutsTable()
+        hunterDao.clearQuestsTable()
+        hunterDao.clearBmiHistoryTable()
+    }
+
+    suspend fun backupCurrentProfile() {
+        val currentProfile = getProfileSync() ?: return
+        if (currentProfile.isRegistered && currentProfile.username != null) {
+            val workouts = hunterDao.getAllWorkoutsSync()
+            val bmiHistory = hunterDao.getBmiHistorySync()
+            val quests = hunterDao.getAllQuestsSync()
+
+            val workoutsJson = com.example.data.database.UserBackupHelper.workoutsToJson(workouts)
+            val bmiHistoryJson = com.example.data.database.UserBackupHelper.bmiHistoryToJson(bmiHistory)
+            val questsJson = com.example.data.database.UserBackupHelper.questsToJson(quests)
+            val profileJson = com.example.data.database.UserBackupHelper.profileToJson(currentProfile)
+
+            val existingAccount = hunterDao.getUserAccountSync(currentProfile.username)
+            if (existingAccount != null) {
+                val updatedAccount = existingAccount.copy(
+                    profileJson = profileJson,
+                    workoutsJson = workoutsJson,
+                    bmiHistoryJson = bmiHistoryJson,
+                    questsJson = questsJson
+                )
+                hunterDao.insertUserAccount(updatedAccount)
+            }
+        }
+    }
+
+    suspend fun restoreUserProfile(username: String): Boolean {
+        val account = hunterDao.getUserAccountSync(username) ?: return false
+        
+        // Clear old database tables
+        clearActiveSession()
+
+        // Restore Profile
+        val restoredProfile = if (account.profileJson != null) {
+            com.example.data.database.UserBackupHelper.profileFromJson(account.profileJson)
+        } else null
+
+        val finalProfile = restoredProfile ?: HunterProfile(
+            email = "$username@shadow.arise",
+            displayName = account.nickname,
+            username = username,
+            isRegistered = true,
+            height = 0.0,
+            weight = 0.0,
+            age = 0,
+            gender = "Other"
+        )
+        
+        hunterDao.insertProfile(finalProfile)
+
+        // Restore Workouts
+        if (account.workoutsJson != null) {
+            val workouts = com.example.data.database.UserBackupHelper.workoutsFromJson(account.workoutsJson)
+            workouts.forEach {
+                hunterDao.insertWorkoutLog(it)
+            }
+        }
+
+        // Restore BMI History
+        if (account.bmiHistoryJson != null) {
+            val bmiHistory = com.example.data.database.UserBackupHelper.bmiHistoryFromJson(account.bmiHistoryJson)
+            bmiHistory.forEach {
+                hunterDao.insertBmiHistory(it)
+            }
+        }
+
+        // Restore Quests
+        if (account.questsJson != null) {
+            val quests = com.example.data.database.UserBackupHelper.questsFromJson(account.questsJson)
+            hunterDao.insertDailyQuests(quests)
+        }
+        
+        return true
+    }
+
+    suspend fun loginAsGuest(nickname: String) {
+        // Clear old database tables
+        clearActiveSession()
+
+        val defaultProfile = HunterProfile(
+            email = "guest@shadow.arise",
+            displayName = nickname,
+            username = "guest_${System.currentTimeMillis()}",
+            isRegistered = false,
+            height = 0.0,
+            weight = 0.0,
+            age = 0,
+            gender = "Other"
+        )
+        hunterDao.insertProfile(defaultProfile)
+    }
+
+    suspend fun registerNewUser(username: String, passwordHash: String, nickname: String): Boolean {
+        // Check if username existing database
+        val existing = hunterDao.getUserAccountSync(username)
+        if (existing != null) return false
+
+        // Create new account
+        val newAccount = com.example.data.database.UserAccount(
+            username = username,
+            passwordHash = passwordHash,
+            nickname = nickname
+        )
+        hunterDao.insertUserAccount(newAccount)
+
+        // Clear active session and log in as this new user
+        clearActiveSession()
+
+        val defaultProfile = HunterProfile(
+            email = "$username@shadow.arise",
+            displayName = nickname,
+            username = username,
+            isRegistered = true,
+            height = 0.0,
+            weight = 0.0,
+            age = 0,
+            gender = "Other"
+        )
+        hunterDao.insertProfile(defaultProfile)
+        
+        return true
+    }
 }

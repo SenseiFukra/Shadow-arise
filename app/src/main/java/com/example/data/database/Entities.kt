@@ -21,7 +21,20 @@ data class HunterProfile(
     val totalCaloriesBurned: Double = 0.0,
     val notificationEnabled: Boolean = true,
     val aiChatEnabled: Boolean = true,
-    val joinDateString: String = "June 19, 2026"
+    val joinDateString: String = "June 19, 2026",
+    val username: String? = null,
+    val isRegistered: Boolean = false
+)
+
+@Entity(tableName = "user_account")
+data class UserAccount(
+    @PrimaryKey val username: String,
+    val passwordHash: String,
+    val nickname: String,
+    val profileJson: String? = null,
+    val workoutsJson: String? = null,
+    val bmiHistoryJson: String? = null,
+    val questsJson: String? = null
 )
 
 @Entity(tableName = "workout_log")

@@ -10,7 +10,8 @@ import androidx.room.RoomDatabase
         HunterProfile::class,
         WorkoutLog::class,
         DailyQuest::class,
-        BmiHistory::class
+        BmiHistory::class,
+        UserAccount::class
     ],
     version = 1,
     exportSchema = false

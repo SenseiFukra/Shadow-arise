@@ -37,6 +37,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -152,10 +154,16 @@ fun ShadowAriseApp(
         ) { targetScreen ->
             when (targetScreen) {
                 "SPLASH" -> SplashScreenView(onComplete = { handleSplashComplete() })
-                "LOGIN" -> LoginScreenView(onSignInSuccess = { email, name ->
-                    viewModel.loginWithGoogle(name, email)
-                    appScreenState = "ONBOARDING"
-                })
+                "LOGIN" -> LoginScreenView(
+                    viewModel = viewModel,
+                    onLoginSuccess = { isFirstTime ->
+                        if (isFirstTime) {
+                            appScreenState = "ONBOARDING"
+                        } else {
+                            appScreenState = "MAIN"
+                        }
+                    }
+                )
                 "ONBOARDING" -> OnboardingScreenView(
                     profile = profileState,
                     onOnboardingComplete = { h, w, age, g, u ->
@@ -820,14 +828,26 @@ private fun dens(context: android.content.Context): Float {
 }
 
 // ==========================================
-
-// ==========================================
 // LOGIN SCREEN VIEW
 // ==========================================
 @Composable
-fun LoginScreenView(onSignInSuccess: (email: String, name: String) -> Unit) {
+fun LoginScreenView(
+    viewModel: HunterViewModel,
+    onLoginSuccess: (isFirstTime: Boolean) -> Unit
+) {
+    var activeTab by remember { mutableStateOf(0) } // 0: Guest, 1: Register, 2: Login
+    
+    // Form States
+    var nicknameState by remember { mutableStateOf("") }
+    var usernameState by remember { mutableStateOf("") }
+    var passwordState by remember { mutableStateOf("") }
+    
+    var loginUsernameState by remember { mutableStateOf("") }
+    var loginPasswordState by remember { mutableStateOf("") }
+    
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -836,6 +856,7 @@ fun LoginScreenView(onSignInSuccess: (email: String, name: String) -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -845,156 +866,413 @@ fun LoginScreenView(onSignInSuccess: (email: String, name: String) -> Unit) {
                     color = BrightPurpleHighlight,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 3.sp,
+                    letterSpacing = 4.sp,
                     fontFamily = FontFamily.Monospace
-                )
+                ),
+                textAlign = TextAlign.Center
             )
 
             Text(
-                text = "\"Arise, Hunter. Your body is your battlefield.\"",
+                text = "\"Your body is your ultimate dungeon. Arise.\"",
                 color = TextSecondary,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 style = TextStyle(fontFamily = FontFamily.Serif),
                 modifier = Modifier.padding(top = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
+            // Main authentic dark system panel
             SystemWindow(
-                title = "SYSTEM AUTHENTICATION"
+                title = "MONARCH SYSTEM GATEWAY",
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "A hunter core connection is required to sync gate logs and daily training history with the monarch cloud databases.",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 20.sp,
-                )
+                // Custom Tab Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    val tabs = listOf("GUEST", "REGISTER", "SIGN IN")
+                    tabs.forEachIndexed { index, title ->
+                        val isSelected = activeTab == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) GlowPurple.copy(alpha = 0.15f) else Color.Transparent)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) GlowPurple else Color.Transparent,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .clickable {
+                                    activeTab = index
+                                    errorMessage = null
+                                    successMessage = null
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = title,
+                                color = if (isSelected) BrightPurpleHighlight else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Sign in with Google Button
-                Button(
-                    onClick = {
-                        showDialog = true
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .border(1.dp, GlowPurple.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .testTag("google_login_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkPurpleAccent,
-                        contentColor = TextPrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = GlowPurple, modifier = Modifier.size(24.dp))
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                // Error Indicator
+                errorMessage?.let { error ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                            .background(Color(0xFF3B1E1E), RoundedCornerShape(8.dp))
+                            .border(1.dp, DangerRed, RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "[ERROR] $error",
+                            color = DangerRed,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // Success Indicator
+                successMessage?.let { success ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                            .background(Color(0xFF1B3B2B), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF00FF87), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "[SYSTEM] $success",
+                            color = Color(0xFF00FF87),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                when (activeTab) {
+                    0 -> {
+                        // Guest Tab
+                        Text(
+                            text = "Awaken instantly with a local nickname. No registry needed, but stats are only stored locally on this device.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = nicknameState,
+                            onValueChange = { nicknameState = it },
+                            label = { Text("Hunter Nickname", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("guest_nickname_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Button(
+                            onClick = {
+                                if (nicknameState.trim().isEmpty()) {
+                                    errorMessage = "Identify yourself, Hunter. Enter a nickname."
+                                    return@Button
+                                }
+                                isLoading = true
+                                errorMessage = null
+                                viewModel.loginAsGuest(nicknameState.trim()) {
+                                    isLoading = false
+                                    onLoginSuccess(true) // guest always goes to onboarding
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("guest_login_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GlowPurple,
+                                contentColor = DeepPurpleBg
+                            ),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Google Sign In",
-                                tint = GlowPurple,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Sign in with Google",
-                                fontSize = 16.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
+                            if (isLoading) {
+                                CircularProgressIndicator(color = DeepPurpleBg, modifier = Modifier.size(22.dp))
+                            } else {
+                                Text(
+                                    text = "ARISE AS GUEST",
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 2.sp
+                                )
+                            }
+                        }
+                    }
+                    1 -> {
+                        // Register Tab
+                        Text(
+                            text = "Register a secure Monarch account to back up and preserve your strength across training cycles.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = nicknameState,
+                            onValueChange = { nicknameState = it },
+                            label = { Text("Hunter Nickname", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                                .testTag("register_nickname_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = usernameState,
+                            onValueChange = { usernameState = it },
+                            label = { Text("Monarch Username", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                                .testTag("register_username_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = passwordState,
+                            onValueChange = { passwordState = it },
+                            label = { Text("Monarch Password", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("register_password_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Button(
+                            onClick = {
+                                if (nicknameState.trim().isEmpty()) {
+                                    errorMessage = "Please enter an awakening Nickname."
+                                    return@Button
+                                }
+                                if (usernameState.trim().isEmpty() || passwordState.trim().isEmpty()) {
+                                    errorMessage = "All registry fields must be defined."
+                                    return@Button
+                                }
+                                if (passwordState.length < 4) {
+                                    errorMessage = "Password integrity warning: Minimum 4 characters."
+                                    return@Button
+                                }
+                                isLoading = true
+                                errorMessage = null
+                                viewModel.registerUser(
+                                    username = usernameState.trim(),
+                                    passwordHash = passwordState,
+                                    nickname = nicknameState.trim(),
+                                    onSuccess = {
+                                        isLoading = false
+                                        successMessage = "Monarch Registry: Account initialized!"
+                                        onLoginSuccess(true)
+                                    },
+                                    onError = {
+                                        isLoading = false
+                                        errorMessage = it
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("register_account_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GlowPurple,
+                                contentColor = DeepPurpleBg
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(color = DeepPurpleBg, modifier = Modifier.size(22.dp))
+                            } else {
+                                Text(
+                                    text = "REGISTER MONARCH",
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.5.sp
+                                )
+                            }
+                        }
+                    }
+                    2 -> {
+                        // Sign In Tab
+                        Text(
+                            text = "Enter Monarch credentials to reopen the gateway and sync your achievements with the active session.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = loginUsernameState,
+                            onValueChange = { loginUsernameState = it },
+                            label = { Text("Monarch Username", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                                .testTag("login_username_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = loginPasswordState,
+                            onValueChange = { loginPasswordState = it },
+                            label = { Text("Monarch Password", fontFamily = FontFamily.Monospace, color = TextSecondary) },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = GlowPurple,
+                                unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                focusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepPurpleBg.copy(alpha = 0.5f)
+                            ),
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, color = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("login_password_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Button(
+                            onClick = {
+                                if (loginUsernameState.trim().isEmpty() || loginPasswordState.trim().isEmpty()) {
+                                    errorMessage = "Please enter both credentials."
+                                    return@Button
+                                }
+                                isLoading = true
+                                errorMessage = null
+                                viewModel.loginUser(
+                                    username = loginUsernameState.trim(),
+                                    passwordHash = loginPasswordState,
+                                    onSuccess = { isFirstTime ->
+                                        isLoading = false
+                                        successMessage = "Gateway connection verified!"
+                                        onLoginSuccess(isFirstTime)
+                                    },
+                                    onError = {
+                                        isLoading = false
+                                        errorMessage = it
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("sign_in_account_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = GlowPurple,
+                                contentColor = DeepPurpleBg
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(color = DeepPurpleBg, modifier = Modifier.size(22.dp))
+                            } else {
+                                Text(
+                                    text = "SIGN IN GATEWAY",
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.5.sp
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            containerColor = CardPurpleBg,
-            title = {
-                Text(
-                    "◆ ACCOUNT CHOOSE PROTOCOL ◆",
-                    color = BrightPurpleHighlight,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "The Solo Leveling system has detected the following credentials:",
-                        color = TextSecondary,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                isLoading = true
-                                showDialog = false
-                                onSignInSuccess("princegood4556@gmail.com", "Prince Good")
-                            }
-                            .border(1.dp, GlowPurple, RoundedCornerShape(8.dp)),
-                        colors = CardDefaults.cardColors(containerColor = DarkPurpleAccent)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(GlowPurple),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "P",
-                                    color = DeepPurpleBg,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    "Prince Good",
-                                    color = TextPrimary,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Text(
-                                    "princegood4556@gmail.com",
-                                    color = TextSecondary,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("DENY STATUS", color = DangerRed, fontFamily = FontFamily.Monospace)
-                }
-            },
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.border(1.dp, GlowPurple, RoundedCornerShape(12.dp))
-        )
     }
 }
 
@@ -2999,8 +3277,13 @@ fun AccountScreenView(viewModel: HunterViewModel, profile: HunterProfile?, bmiHi
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
+                        val accountType = if (profile?.isRegistered == true) {
+                            "Registry ID: mnc-${profile.username?.lowercase() ?: "register"}"
+                        } else {
+                            "System Role: Guest Hunter"
+                        }
                         Text(
-                            profile?.email ?: "princegood4556@gmail.com",
+                            accountType,
                             color = TextSecondary,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace

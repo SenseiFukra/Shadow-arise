@@ -213,21 +213,48 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun loginWithGoogle(displayName: String, email: String) {
+    fun loginAsGuest(nickname: String, onComplete: () -> Unit) {
         viewModelScope.launch {
-            val existing = repository.getProfileSync()
-            if (existing == null) {
-                // Initialize default profile pending onboarding completion
-                val defaultProfile = HunterProfile(
-                    email = email,
-                    displayName = displayName,
-                    profilePicUrl = null,
-                    height = 0.0,
-                    weight = 0.0,
-                    age = 0,
-                    gender = "Other"
-                )
-                repository.saveProfile(defaultProfile)
+            repository.loginAsGuest(nickname)
+            // Generate standard quests for today's date
+            generateQuestsForDate(getTodayDateString())
+            onComplete()
+        }
+    }
+
+    fun registerUser(username: String, passwordHash: String, nickname: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.registerNewUser(username, passwordHash, nickname)
+            if (success) {
+                generateQuestsForDate(getTodayDateString())
+                onSuccess()
+            } else {
+                onError("Username is already claimed by another awakening.")
+            }
+        }
+    }
+
+    fun loginUser(username: String, passwordHash: String, onSuccess: (isFirstTime: Boolean) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val account = repository.getUserAccount(username)
+            if (account == null) {
+                onError("Monarch Registry: Account not found.")
+                return@launch
+            }
+            if (account.passwordHash != passwordHash) {
+                onError("Incorrect password. Integrity check failed.")
+                return@launch
+            }
+
+            // Restore
+            val isRestored = repository.restoreUserProfile(username)
+            if (isRestored) {
+                generateQuestsForDate(getTodayDateString())
+                val updatedProfile = repository.getProfileSync()
+                val isFirstTime = updatedProfile == null || updatedProfile.height == 0.0 || updatedProfile.weight == 0.0
+                onSuccess(isFirstTime)
+            } else {
+                onError("Corrupted dimension: Failed to restore user data.")
             }
         }
     }
@@ -347,10 +374,10 @@ class HunterViewModel(application: Application) : AndroidViewModel(application) 
 
     fun signOut() {
         viewModelScope.launch {
-            // Delete and clear current state
-            withContext(Dispatchers.IO) {
-                db.clearAllTables()
-            }
+            // Backup current session first
+            repository.backupCurrentProfile()
+            // Clear current active tables
+            repository.clearActiveSession()
             _chatHistory.value = emptyList()
         }
     }
